@@ -1,5 +1,5 @@
 # CENG543_Project
-CENG543 Term Project Proposal – Eray Kocabozdoğan
+CENG543 - Term Project
 
 Title
 Evaluating the Impact of Anonymization Strategies on Contextual Integrity and Faithfulness in Retrieval-Augmented Generation
