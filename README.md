@@ -1,28 +1,28 @@
 CENG543 Term Project
 
- - Title - 
+ - Title
 
 Evaluating the Impact of Anonymization Strategies on Contextual Integrity and Faithfulness in Retrieval-Augmented Generation
 
 
- - Overview - 
+ - Overview
 
 This project investigates the trade-off between data privacy and utility in Retrieval-Augmented Generation (RAG) systems. While Large Language Models require vast amounts of data, using sensitive information raises privacy concerns. We focus on how different anonymization techniques affect the downstream performance of RAG pipelines, specifically analyzing the impact on retrieval accuracy and the faithfulness of generated answers.
 
 
- - Problem Statement - 
+ - Problem Statement
 
 Standard anonymization techniques often disrupt the semantic structure of text. We compare two primary strategies to understand their effects: (A) Placeholder Substitution: Replacing sensitive entities with generic tags (e.g., [PERSON], [LOCATION]). (B) Semantic Substitution: Replacing entities with synthetic, format-preserving data (e.g., replacing "Alice" with "Jane", or a real address with a fake but valid address format).
 
 We hypothesize that while semantic substitution preserves linguistic fluency, it may introduce false semantic signals that mislead dense retrievers, whereas placeholder substitution might degrade the context but preserve structural integrity.
 
 
- - Dataset - 
+ - Dataset
 
 We utilize the Stanford Question Answering Dataset (SQuAD v1.1) for this study. SQuAD provides high-quality context-question-answer triplets, allowing for a controlled evaluation of reading comprehension. We synthetically inject and then anonymize PII (Personally Identifiable Information) within the contexts to simulate sensitive documents. The target PII categories include Person, Location, Organization, Date, and Phone/Email.
 
 
- - Methodology - 
+ - Methodology
  
 The experimental pipeline consists of three main modules:
 
@@ -33,7 +33,7 @@ The experimental pipeline consists of three main modules:
 3. Generation: An open-source instruction-tuned LLM (e.g., Mistral or Llama families) is used to generate answers based on the retrieved, anonymized contexts.
 
 
- - Evaluation Plan - 
+ - Evaluation Plan
 
 We conduct a comparative analysis between the baseline (non-anonymized) system and the two anonymization strategies.
 
