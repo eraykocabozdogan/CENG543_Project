@@ -1,0 +1,10 @@
+transformers
+sentence-transformers
+faiss-cpu
+spacy
+faker
+pandas
+openpyxl
+torch
+numpy
+datasets

@@ -1,42 +1,58 @@
-CENG543 Term Project
+# CENG543 Term Project
 
- - Title
+# Evaluating the Impact of Anonymization Strategies on Contextual Integrity and Faithfulness in Retrieval-Augmented Generation
 
-Evaluating the Impact of Anonymization Strategies on Contextual Integrity and Faithfulness in Retrieval-Augmented Generation
-
-
- - Overview
-
+## Overview
 This project investigates the trade-off between data privacy and utility in Retrieval-Augmented Generation (RAG) systems. While Large Language Models require vast amounts of data, using sensitive information raises privacy concerns. We focus on how different anonymization techniques affect the downstream performance of RAG pipelines, specifically analyzing the impact on retrieval accuracy and the faithfulness of generated answers.
 
+## Problem Statement
+Standard anonymization techniques often disrupt the semantic structure of text. We compare three primary strategies to understand their effects:
 
- - Problem Statement
+1. **Placeholder Substitution:** Replacing sensitive entities with generic tags (e.g., `[PERSON]`, `[LOCATION]`).
+2. **Semantic Substitution (Faker):** Replacing entities with synthetic, format-preserving data (e.g., replacing "Alice" with "Jane").
+3. **Context-Aware Substitution (BERT):** Using a Masked Language Model to generate synthetic entities that fit the semantic context of the sentence (Utility-Preserving Anonymization).
 
-Standard anonymization techniques often disrupt the semantic structure of text. We compare two primary strategies to understand their effects: (A) Placeholder Substitution: Replacing sensitive entities with generic tags (e.g., [PERSON], [LOCATION]). (B) Semantic Substitution: Replacing entities with synthetic, format-preserving data (e.g., replacing "Alice" with "Jane", or a real address with a fake but valid address format).
-
-We hypothesize that while semantic substitution preserves linguistic fluency, it may introduce false semantic signals that mislead dense retrievers, whereas placeholder substitution might degrade the context but preserve structural integrity.
-
-
- - Dataset
-
-We utilize the Stanford Question Answering Dataset (SQuAD v1.1) for this study. SQuAD provides high-quality context-question-answer triplets, allowing for a controlled evaluation of reading comprehension. We synthetically inject and then anonymize PII (Personally Identifiable Information) within the contexts to simulate sensitive documents. The target PII categories include Person, Location, Organization, Date, and Phone/Email.
-
-
- - Methodology
- 
+## Methodology
 The experimental pipeline consists of three main modules:
 
-1. Privacy Preservation Layer: We employ NLP-based entity detection to identify PII. The identified entities are then processed using the two substitution strategies mentioned above.
+- **Privacy Preservation Layer:** We employ NLP-based entity detection (spaCy) to identify PII. The identified entities are then processed using the three substitution strategies mentioned above.
+- **Retrieval System:** Instead of sparse retrieval methods, we utilize a Dense Passage Retriever (Bi-Encoder) architecture based on Sentence-Transformers (`all-MiniLM-L6-v2`) to index and search the anonymized contexts.
+- **Generation:** An open-source instruction-tuned LLM (`google/flan-t5-base`) is used to generate answers based on the retrieved, anonymized contexts.
 
-2. Retrieval System: Instead of sparse retrieval methods, we utilize a Dense Passage Retriever (Bi-Encoder) architecture based on Sentence-Transformers (e.g., all-MiniLM) to index and search the anonymized contexts.
+## Dataset
+We utilize the **Stanford Question Answering Dataset (SQuAD v1.1)** for this study. SQuAD provides high-quality context-question-answer triplets, allowing for a controlled evaluation of reading comprehension. We synthetically inject and then anonymize PII (Personally Identifiable Information) within the contexts to simulate sensitive documents. The target PII categories include Person, Location, Organization, and Date.
 
-3. Generation: An open-source instruction-tuned LLM (e.g., Mistral or Llama families) is used to generate answers based on the retrieved, anonymized contexts.
+## Installation & Usage
 
+To reproduce the experiments, please follow the steps below:
 
- - Evaluation Plan
+### 1. Prerequisites
+- Python 3.8 or higher
+- pip
 
-We conduct a comparative analysis between the baseline (non-anonymized) system and the two anonymization strategies.
+### 2. Installation
+Clone the repository and install the required dependencies:
 
-Retrieval Performance: Measured using standard Information Retrieval metrics such as Recall@K and Mean Reciprocal Rank (MRR) to assess if the correct documents are retrieved despite the data perturbation.
+``bash
+# Install dependencies
+pip install -r requirements.txt
 
-Generation Quality: Evaluated using SQuAD standard metrics (Exact Match, F1-Score) and specific RAG metrics like Faithfulness to quantify how much the anonymization process distorts the factual grounding of the answers.
+# Download necessary spaCy model
+"python -m spacy download en_core_web_sm"
+
+### 3. Running the Experiments
+
+Run the main script to execute the full pipeline (Data Loading -> Anonymization -> RAG Retrieval & Generation):
+
+"python main.py"
+
+### 4. Outputs
+
+After the execution is complete, the results will be saved in the data/ directory:
+
+- data/experiment_results_v1.csv: Detailed CSV report containing questions, ground truths, retrieved contexts, and generated answers for all strategies.
+
+- data/experiment_results_v1.xlsx: Excel format of the results.
+
+### Preliminary Results
+Initial experiments indicate that while placeholder substitution leads to context loss and retrieval failures, semantic substitution introduces "grounded hallucinations," where the model generates factually incorrect answers with high confidence based on synthetic entities. Context-aware substitution aims to mitigate these issues by preserving semantic coherence.
