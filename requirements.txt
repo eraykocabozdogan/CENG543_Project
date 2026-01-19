@@ -1,10 +1,27 @@
+# Author: Eray Kocabozdoğan
+# Student ID: 280201055
+
+# Core ML/NLP libraries
 transformers
 sentence-transformers
-faiss-cpu
-spacy
-faker
-pandas
-openpyxl
 torch
 numpy
+
+# Retrieval & Search
+faiss-cpu
+rank-bm25
+
+# Privacy & Anonymization
+presidio-analyzer
+presidio-anonymizer
+spacy
+faker
+
+# Data handling
+pandas
 datasets
+
+# Utilities
+scikit-learn
+nltk
+jinja2

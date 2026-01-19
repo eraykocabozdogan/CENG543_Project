@@ -1,78 +1,104 @@
-import spacy
+"""
+Author: Eray Kocabozdoğan
+Student ID: 280201055
+Anonymization module for PII detection and substitution.
+"""
+
+from presidio_analyzer import AnalyzerEngine
 from faker import Faker
 from transformers import pipeline
-import re
+import random
+
 
 class Anonymizer:
+    """Handles PII detection and anonymization using multiple strategies."""
+    
     def __init__(self):
-        print("Loading spaCy model...")
-        self.nlp = spacy.load("en_core_web_sm")
-        
+        print("Initializing Anonymizer Engine...")
+        self.analyzer = AnalyzerEngine()
         self.faker = Faker()
         
-        # YENİ EKLENTİ: Context-Aware (BERT) için model yükleme
-        # Sadece bu satır bile projeyi 'advanced' yapar.
-        print("Loading Mask-Filling Model (DistilBERT)...")
-        self.mask_filler = pipeline("fill-mask", model="distilbert-base-uncased")
+        print("Loading DistilBERT for Context-Aware substitution...")
+        self.fill_mask = pipeline("fill-mask", model="distilbert-base-uncased", device=-1)
+        
+        self.target_entities = ["PERSON", "GPE", "ORG"] 
+
+    def analyze(self, text):
+        """Detect PII entities in text."""
+        results = self.analyzer.analyze(text=text, language='en')
+        filtered_results = [
+            res for res in results 
+            if res.entity_type in self.target_entities and res.score > 0.4
+        ]
+        return filtered_results
+
+    def get_faker_replacement(self, entity_type):
+        """Generate synthetic data based on entity type using Faker."""
+        if entity_type == "PERSON":
+            return self.faker.name()
+        elif entity_type in ["GPE", "LOCATION"]:
+            return self.faker.city()
+        elif entity_type == "ORG":
+            return self.faker.company()
+        else:
+            return "[UNKNOWN]"
+
+    def get_bert_replacement(self, text, start, end, original_word):
+        """Generate context-aware replacement using BERT masked language model."""
+        masked_text = text[:start] + "[MASK]" + text[end:]
+        
+        try:
+            predictions = self.fill_mask(masked_text, top_k=5)
+        except Exception:
+            return "[MASKED_ENTITY]"
+
+        best_candidate = "[MASKED_ENTITY]"
+        for pred in predictions:
+            candidate = pred['token_str'].strip()
+            candidate_clean = candidate.lower().replace("Ġ", "")
+            original_clean = original_word.lower()
+
+            if (candidate_clean not in original_clean) and \
+               (original_clean not in candidate_clean) and \
+               (len(candidate_clean) > 2):
+                best_candidate = candidate
+                break
+        
+        return best_candidate
 
     def anonymize(self, text, strategy="placeholder"):
         """
-        strategy: 'placeholder', 'semantic' (Faker), veya 'context_aware' (BERT)
+        Anonymize text using specified strategy.
+        
+        Args:
+            text: Input text to anonymize
+            strategy: 'placeholder', 'semantic', or 'context_aware'
+        
+        Returns:
+            Anonymized text
         """
-        doc = self.nlp(text)
+        entities = self.analyze(text)
+        if not entities:
+            return text
+            
+        entities = sorted(entities, key=lambda x: x.start, reverse=True)
         anonymized_text = text
         
-        # Tersten işlem yapıyoruz ki indexler kaymasın
-        entities = reversed(list(doc.ents))
-        
-        for ent in entities:
-            label = ent.label_
+        for entity in entities:
+            start = entity.start
+            end = entity.end
+            entity_type = entity.entity_type
+            original_word = text[start:end]
             
-            # Sadece hedef kategoriler
-            if label not in ["PERSON", "ORG", "GPE", "DATE"]:
-                continue
-            
-            replacement = ent.text # Varsayılan: Değiştirme
-
             if strategy == "placeholder":
-                replacement = f"[{label}]"
-            
+                replacement = f"[{entity_type}]"
             elif strategy == "semantic":
-                # Eski yöntem: Rastgele (Faker)
-                if label == "PERSON": replacement = self.faker.first_name()
-                elif label == "ORG": replacement = self.faker.company()
-                elif label == "GPE": replacement = self.faker.city()
-                elif label == "DATE": replacement = self.faker.year()
-                else: replacement = f"[{label}]"
-                
+                replacement = self.get_faker_replacement(entity_type)
             elif strategy == "context_aware":
-                # YENİ YÖNTEM: BERT ile bağlama uygun tahmin
-                # Tarihleri BERT ile tahmin etmek zordur, onları Faker'a bırakalım
-                if label == "DATE":
-                    replacement = self.faker.year()
-                else:
-                    try:
-                        # 1. Entity yerine [MASK] koy
-                        masked_sentence = text[:ent.start_char] + "[MASK]" + text[ent.end_char:]
-                        
-                        # 2. Modeli çalıştır
-                        predictions = self.mask_filler(masked_sentence)
-                        
-                        # 3. Orijinal kelimeyle aynısını seçmemeye çalış
-                        best_candidate = predictions[0]['token_str']
-                        for pred in predictions:
-                            candidate = pred['token_str']
-                            # Temizlik: Noktalama işaretlerini ve orijinal kelimeyi ele
-                            if candidate.lower() not in ent.text.lower() and len(candidate) > 2:
-                                best_candidate = candidate
-                                break
-                        
-                        replacement = best_candidate
-                    except Exception as e:
-                        # Hata olursa placeholder kullan (Fallback)
-                        replacement = f"[{label}]"
+                replacement = self.get_bert_replacement(text, start, end, original_word)
+            else:
+                replacement = f"[{entity_type}]"
 
-            # Metni güncelle
-            anonymized_text = anonymized_text[:ent.start_char] + replacement + anonymized_text[ent.end_char:]
+            anonymized_text = anonymized_text[:start] + replacement + anonymized_text[end:]
             
         return anonymized_text

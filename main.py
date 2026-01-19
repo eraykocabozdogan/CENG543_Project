@@ -1,97 +1,114 @@
+"""
+Author: Eray Kocabozdoğan
+Student ID: 280201055
+CENG543 Term Project - Main Experiment Runner
+"""
+
 import pandas as pd
 import os
+import time
 from src.utils import load_squad_sample
 from src.anonymizer import Anonymizer
-from src.rag_pipeline import SimpleRAG
+from src.rag_pipeline import RAGSystem
 
-def run_experiment_batch(documents, questions, answers, pipeline_name):
-    print(f"\n--- Running Pipeline: {pipeline_name} ---")
-    rag = SimpleRAG()
-    rag.ingest_documents(documents)
-    results = []
+
+def save_batch_results(results, filename):
+    """Save experiment results to CSV file."""
+    folder_path = os.path.join(os.getcwd(), "data")
+    os.makedirs(folder_path, exist_ok=True)
+    full_path = os.path.join(folder_path, filename)
     
-    for i, question in enumerate(questions):
-        retrieved_docs = rag.retrieve(question, k=1)
+    if not results:
+        print(f"   [WARNING] No results to save: {filename}")
+        return
+
+    df = pd.DataFrame(results)
+    df.to_csv(full_path, index=False)
+    print(f"   [SAVED] Results saved to: {full_path}")
+
+def run_experiment_batch(documents, questions, answers, anon_strategy, retrieval_method):
+    """Run a batch of RAG experiments with specified anonymization and retrieval method."""
+    print(f"\n>>> Running Experiment: Anonymization='{anon_strategy}' | Retrieval='{retrieval_method}'")
+    
+    rag = RAGSystem(retrieval_method=retrieval_method)
+    rag.ingest_documents(documents)
+    
+    results = []
+    start_time = time.time()
+    
+    for i, (q, truth) in enumerate(zip(questions, answers)):
+        retrieved_docs = rag.retrieve(q, k=1)
         context = retrieved_docs[0] if retrieved_docs else ""
-        model_prediction = rag.generate_answer(question, context)
+        model_pred = rag.generate_answer(q, context)
         
         results.append({
-            "pipeline": pipeline_name,
-            "question": question,
-            "ground_truth": answers[i],
-            "retrieved_context": context,
-            "model_answer": model_prediction
+            "anonymization_strategy": anon_strategy,
+            "retrieval_method": retrieval_method,
+            "question": q,
+            "ground_truth": truth,
+            "retrieved_context_snippet": context[:200], 
+            "model_answer": model_pred
         })
-        # İlerleme durumunu görmek için log
-        print(f"[{pipeline_name}] Q{i+1}/{len(questions)} Processed.")
+        
+        if (i+1) % 50 == 0:
+            print(f"   Processed {i+1}/{len(questions)} queries...")
+
+    duration = time.time() - start_time
+    print(f"   Finished in {duration:.2f} seconds.")
     return results
 
 def main():
-    # --- AYARLAR ---
-    # V1 teslimi için 20-30 idealdir. 100 yaparsan işlem çok uzun sürebilir.
-    NUM_SAMPLES = 20 
+    """Main experiment pipeline."""
+    NUM_SAMPLES = 500
     
-    # Çıktı klasörünü belirle ve yoksa oluştur
-    OUTPUT_DIR = "data"
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
-        
-    print(f"--- STEP 1: Loading {NUM_SAMPLES} samples from SQuAD ---")
-    data = load_squad_sample(n=NUM_SAMPLES)
+    raw_data = load_squad_sample(n=NUM_SAMPLES)
+    original_docs = [d['context'] for d in raw_data]
+    questions = [d['question'] for d in raw_data]
+    ground_truths = [d['answers'] for d in raw_data]
     
-    questions = [d['question'] for d in data]
-    ground_truths = [d['answers'] for d in data]
-    original_docs = [d['context'] for d in data]
-    
-    # --- STEP 2: Anonymization ---
-    print("\n--- STEP 2: Preparing Anonymized Datasets ---")
     anonymizer = Anonymizer()
-    
-    print("Applying Placeholder Strategy...")
-    placeholder_docs = [anonymizer.anonymize(doc, strategy="placeholder") for doc in original_docs]
-    
-    print("Applying Semantic Strategy (Faker)...")
-    semantic_docs = [anonymizer.anonymize(doc, strategy="semantic") for doc in original_docs]
-    
-    print("Applying Context-Aware Strategy (BERT) - This will take time...")
-    context_aware_docs = [anonymizer.anonymize(doc, strategy="context_aware") for doc in original_docs]
-    
-    # --- STEP 3: Experiments ---
-    results_baseline = run_experiment_batch(original_docs, questions, ground_truths, "Baseline")
-    results_placeholder = run_experiment_batch(placeholder_docs, questions, ground_truths, "Placeholder")
-    results_semantic = run_experiment_batch(semantic_docs, questions, ground_truths, "Semantic (Faker)")
-    results_context = run_experiment_batch(context_aware_docs, questions, ground_truths, "Context-Aware (BERT)")
-    
-    # --- STEP 4: Saving Results ---
-    print("\n--- STEP 4: Saving Results ---")
-    final_data = []
-    for i in range(NUM_SAMPLES):
-        row = {
-            "Question": questions[i],
-            "Ground_Truth": ground_truths[i],
-            
-            "Baseline_Answer": results_baseline[i]['model_answer'],
-            "Placeholder_Answer": results_placeholder[i]['model_answer'],
-            "Semantic_Answer": results_semantic[i]['model_answer'],
-            "ContextAware_Answer": results_context[i]['model_answer'],
+    print("\n--- Preparing Anonymized Datasets ---")
 
-            "Baseline_Context": results_baseline[i]['retrieved_context'],
-            "Placeholder_Context": results_placeholder[i]['retrieved_context'],
-            "Semantic_Context": results_semantic[i]['retrieved_context'],
-            "ContextAware_Context": results_context[i]['retrieved_context']
-        }
-        final_data.append(row)
-        
-    df = pd.DataFrame(final_data)
+    # Scenario 1: Baseline (No Anonymization)
+    print("\n=== SCENARIO 1: BASELINE ===")
+    results_baseline = []
+    results_baseline.extend(run_experiment_batch(original_docs, questions, ground_truths, "Baseline", "dense_numpy"))
+    results_baseline.extend(run_experiment_batch(original_docs, questions, ground_truths, "Baseline", "sparse_bm25"))
+    save_batch_results(results_baseline, "results_01_baseline.csv")
+
+
+    # Scenario 2: Placeholder Anonymization
+    print("\n=== SCENARIO 2: PLACEHOLDER ===")
+    print("Generating Placeholder dataset...")
+    docs_placeholder = [anonymizer.anonymize(d, strategy="placeholder") for d in original_docs]
     
-    # Dosya yollarını data/ klasörüne yönlendir
-    excel_path = os.path.join(OUTPUT_DIR, "experiment_results_v1.xlsx")
-    csv_path = os.path.join(OUTPUT_DIR, "experiment_results_v1.csv")
+    results_placeholder = []
+    results_placeholder.extend(run_experiment_batch(docs_placeholder, questions, ground_truths, "Placeholder", "dense_numpy"))
+    results_placeholder.extend(run_experiment_batch(docs_placeholder, questions, ground_truths, "Placeholder", "sparse_bm25"))
+    save_batch_results(results_placeholder, "results_02_placeholder.csv")
+
+
+    # Scenario 3: Faker (Semantic Substitution)
+    print("\n=== SCENARIO 3: FAKER (SEMANTIC) ===")
+    print("Generating Faker dataset...")
+    docs_faker = [anonymizer.anonymize(d, strategy="semantic") for d in original_docs]
     
-    df.to_excel(excel_path, index=False)
-    df.to_csv(csv_path, index=False)
+    results_faker = []
+    results_faker.extend(run_experiment_batch(docs_faker, questions, ground_truths, "Faker", "dense_numpy"))
+    results_faker.extend(run_experiment_batch(docs_faker, questions, ground_truths, "Faker", "sparse_bm25"))
+    save_batch_results(results_faker, "results_03_faker.csv")
+
+
+    # Scenario 4: Context-Aware (BERT-based)
+    print("\n=== SCENARIO 4: CONTEXT AWARE ===")
+    print("Generating Context-Aware dataset (This takes time)...")
+    docs_context = [anonymizer.anonymize(d, strategy="context_aware") for d in original_docs]
     
-    print(f"Successfully saved results to:\n -> {excel_path}\n -> {csv_path}")
+    results_context = []
+    results_context.extend(run_experiment_batch(docs_context, questions, ground_truths, "ContextAware", "dense_numpy"))
+    save_batch_results(results_context, "results_04_context_aware.csv")
+
+    print("\nAll experiments completed! Check the 'data/' folder.")
 
 if __name__ == "__main__":
     main()

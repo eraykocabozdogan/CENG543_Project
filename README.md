@@ -1,58 +1,115 @@
-# CENG543 Term Project
+# Privacy-Preserving RAG Systems: Evaluating Anonymization Strategies
 
-# Evaluating the Impact of Anonymization Strategies on Contextual Integrity and Faithfulness in Retrieval-Augmented Generation
+Author: Eray Kocabozdoğan  
+Student ID: 280201055  
+Course: CENG543 - Information Retrieval Systems
 
 ## Overview
-This project investigates the trade-off between data privacy and utility in Retrieval-Augmented Generation (RAG) systems. While Large Language Models require vast amounts of data, using sensitive information raises privacy concerns. We focus on how different anonymization techniques affect the downstream performance of RAG pipelines, specifically analyzing the impact on retrieval accuracy and the faithfulness of generated answers.
 
-## Problem Statement
-Standard anonymization techniques often disrupt the semantic structure of text. We compare three primary strategies to understand their effects:
+This project investigates how different text anonymization strategies affect the performance of Retrieval-Augmented Generation (RAG) systems. While protecting personally identifiable information (PII) is crucial, anonymization can disrupt semantic structure and harm downstream model performance. We evaluate three anonymization approaches and their impact on retrieval accuracy and answer generation quality.
 
-1. **Placeholder Substitution:** Replacing sensitive entities with generic tags (e.g., `[PERSON]`, `[LOCATION]`).
-2. **Semantic Substitution (Faker):** Replacing entities with synthetic, format-preserving data (e.g., replacing "Alice" with "Jane").
-3. **Context-Aware Substitution (BERT):** Using a Masked Language Model to generate synthetic entities that fit the semantic context of the sentence (Utility-Preserving Anonymization).
+The research question is: How do different anonymization strategies affect the trade-off between privacy protection and utility preservation in RAG pipelines?
 
-## Methodology
-The experimental pipeline consists of three main modules:
+## Anonymization Strategies
 
-- **Privacy Preservation Layer:** We employ NLP-based entity detection (spaCy) to identify PII. The identified entities are then processed using the three substitution strategies mentioned above.
-- **Retrieval System:** Instead of sparse retrieval methods, we utilize a Dense Passage Retriever (Bi-Encoder) architecture based on Sentence-Transformers (`all-MiniLM-L6-v2`) to index and search the anonymized contexts.
-- **Generation:** An open-source instruction-tuned LLM (`google/flan-t5-base`) is used to generate answers based on the retrieved, anonymized contexts.
+We compare three approaches for anonymizing sensitive entities (Person, Organization, Location):
+
+1. **Baseline**: No anonymization (reference).
+2. **Placeholder**: Replace entities with generic tags (e.g., `[PERSON]`, `[ORG]`).
+3. **Faker**: Replace with synthetic, realistic data (e.g., "Alice" becomes "Jane Smith").
+4. **Context-Aware**: Use BERT masked language modeling to generate contextually appropriate replacements.
+
+## Architecture
+
+The system consists of three main components:
+
+1. **Privacy Layer**: PII detection using Presidio Analyzer and spaCy NER.
+2. **Anonymization Engine**: Implements the three substitution strategies.
+3. **Retrieval Systems**: Dense retrieval using Sentence-Transformers with FAISS or Numpy, and Sparse retrieval using BM25.
+4. **Generator**: FLAN-T5-base model for answer generation.
 
 ## Dataset
-We utilize the **Stanford Question Answering Dataset (SQuAD v1.1)** for this study. SQuAD provides high-quality context-question-answer triplets, allowing for a controlled evaluation of reading comprehension. We synthetically inject and then anonymize PII (Personally Identifiable Information) within the contexts to simulate sensitive documents. The target PII categories include Person, Location, Organization, and Date.
 
-## Installation & Usage
+We use SQuAD v1.1 (Stanford Question Answering Dataset) validation split, filtered for PII-rich questions containing keywords like who, where, which organization. The sample size is 500 context-question-answer triplets.
 
-To reproduce the experiments, please follow the steps below:
+## Installation
 
-### 1. Prerequisites
-- Python 3.8 or higher
-- pip
+Prerequisites: Python 3.8 or higher, 8GB RAM recommended.
 
-### 2. Installation
-Clone the repository and install the required dependencies:
+Clone the repository and install dependencies:
 
-``bash
-# Install dependencies
+```bash
+git clone https://github.com/eraykocabozdogan/CENG543_Project.git
+cd CENG543_Project
 pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+```
 
-# Download necessary spaCy model
-"python -m spacy download en_core_web_sm"
+---
 
-### 3. Running the Experiments
+## Usage
 
-Run the main script to execute the full pipeline (Data Loading -> Anonymization -> RAG Retrieval & Generation):
+### 1. Run Main Experiments (Dense + Sparse Retrieval)
 
-"python main.py"
+```bash
+python main.py
+```
 
-### 4. Outputs
+This runs all four anonymization strategies with both Dense (Numpy) and Sparse (BM25) retrieval methods. Results are saved to `data/results_*.csv`.
 
-After the execution is complete, the results will be saved in the data/ directory:
+### 2. Run FAISS Experiments
 
-- data/experiment_results_v1.csv: Detailed CSV report containing questions, ground truths, retrieved contexts, and generated answers for all strategies.
+```bash
+python run_faiss.py
+```
 
-- data/experiment_results_v1.xlsx: Excel format of the results.
+This evaluates all strategies using FAISS approximate nearest neighbor search. Results are saved to `faiss_data/results_*_faiss.csv`.
 
-### Preliminary Results
-Initial experiments indicate that while placeholder substitution leads to context loss and retrieval failures, semantic substitution introduces "grounded hallucinations," where the model generates factually incorrect answers with high confidence based on synthetic entities. Context-aware substitution aims to mitigate these issues by preserving semantic coherence.
+### 3. Filter PII-Rich Rows (Optional but Recommended)
+
+To evaluate the impact of anonymization more accurately, you can filter the dataset to include only rows where PII was actually detected and masked (excluding rows that remained identical to Baseline).
+
+```bash
+python filter_pii_rows.py
+```
+
+This script:
+*   Compares Baseline and Placeholder datasets.
+*   Identifies rows where content has changed (PII detected).
+*   Generates new `*_filtered.csv` files in `data/` and `faiss_data/` containing 250 PII-rich samples for *all* strategies (Baseline, Placeholder, Faker, Context-Aware).
+
+### 4. Analyze Results
+
+```bash
+python analyze_final.py
+```
+
+This generates comprehensive evaluation metrics and comparison tables.
+*   Automatically detects standard and "Filtered" datasets.
+*   Outputs formatted tables to terminal.
+*   Generates LaTeX code for papers.
+*   Saves results to `final_analysis_results.csv`.
+
+---
+
+## Evaluation Metrics
+
+*   **Retrieval Recall**: Does the retriever find documents containing the correct answer?
+*   **Exact Match (EM)**: Does the generated answer exactly match the ground truth?
+*   **F1 Score**: Token-level overlap between prediction and ground truth.
+*   **Faithfulness**: Is the generated answer grounded in the retrieved context?
+*   **Gap (Hallucination)**: Difference between Faithfulness and EM, measures grounded hallucinations.
+
+## Key Findings
+
+Preliminary results show that:
+*   **Dataset Impact**: About 43% of the dataset did not contain PII. Filtering for PII-rich rows reveals a much sharper performance drop for anonymization methods.
+*   **Performance Drop**: When tested on PII-rich data, Placeholder anonymization causes severe retrieval failures (EM drops from ~50% to **15.2%**).
+*   **Comparison**: **Faker** performs even worse than Placeholder in these strict conditions (**14.0% EM**). Context-Aware strategies offer slight improvements (16.0% EM) but still suffer significantly compared to Baseline.
+*   **Robustness**: Dense retrieval is generally more robust to anonymization than sparse (BM25) methods.
+
+## Expected Runtime
+
+- `main.py`: ~30-60 minutes
+- `run_faiss.py`: ~20-40 minutes
+- `analyze_final.py`: < 1 minute
