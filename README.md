@@ -113,3 +113,6 @@ Preliminary results show that:
 - `main.py`: ~30-60 minutes
 - `run_faiss.py`: ~20-40 minutes
 - `analyze_final.py`: < 1 minute
+
+## Plotting
+- To reproduce the figures in the paper, run python generate_plots.py.
